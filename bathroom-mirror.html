@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>雾气玻璃 · 浴室镜子</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; overflow: hidden; color: #f0f8f5; font: 14px/1.55 system-ui, sans-serif; }
+  main, video, canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+  main { background: radial-gradient(ellipse at 74% 8%, #708e86, transparent 66%), linear-gradient(155deg, #354c4a, #132924 86%); }
+  video, canvas { transform: scaleX(-1); }
+  video { object-fit: cover; object-position: center; visibility: hidden; }
+  video.live { visibility: visible; }
+  canvas { pointer-events: none; }
+  main { touch-action:none; cursor:crosshair; }
+  .hud { position: fixed; transition: opacity .45s ease; }
+  body.idle .hud { opacity: .28; }
+  body.idle .hud:hover, body.idle .hud:focus-within { opacity: 1; }
+  section { top: max(18px, env(safe-area-inset-top)); left: max(18px, env(safe-area-inset-left)); width: min(330px, calc(100% - 36px)); padding: 16px 19px; background: #112a26e8; border: 1px solid #dfefe34d; border-radius: 16px; box-shadow: 0 12px 36px #071b252f; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 16px; margin: 0; }
+  dt { color: #b9d1c9; } dd { margin: 0; font-variant-numeric: tabular-nums; }
+  p { margin: 10px 0 0; color: #f9e1b5; overflow-wrap: anywhere; }
+  button { left: 50%; bottom: max(22px, env(safe-area-inset-bottom)); transform: translateX(-50%); background: #112a26f0; color: inherit; border: 1px solid #d6eee099; border-radius: 999px; padding: 11px 24px; min-height: 44px; font: inherit; cursor: pointer; white-space: nowrap; }
+  button:focus-visible { outline: 2px solid white; outline-offset: 4px; }
+  @media (prefers-reduced-motion: reduce) { .hud { transition: none; } }
+  .return-desk { position:fixed; z-index:2; top:max(14px,env(safe-area-inset-top)); left:max(18px,env(safe-area-inset-left)); display:inline-flex; align-items:center; min-height:40px; padding:7px 15px; background:#112a26ef; border:1px solid #d6eee099; border-radius:999px; color:inherit; text-decoration:none; }
+  .return-desk:hover { background:#28453f; }
+  .return-desk:focus-visible { outline:2px solid white; outline-offset:3px; }
+  section { top:calc(max(14px, env(safe-area-inset-top)) + 51px); }
+</style>
+</head>
+<body>
+<a class="return-desk" href="./?mirror=17">← 返回窗边</a>
+<main aria-label="浴室镜面">
+  <video id="video" autoplay playsinline muted aria-hidden="true"></video>
+  <canvas id="fog" aria-hidden="true"></canvas>
+  <canvas id="runoff" aria-hidden="true"></canvas>
+</main>
+<section class="hud" aria-label="镜面状态">
+  <dl>
+    <dt>状态</dt><dd id="status" role="status">可用鼠标拖动擦雾</dd>
+    <dt>视频帧率</dt><dd id="fps">—</dd>
+    <dt>手部识别</dt><dd id="hand">待开启</dd>
+    <dt>吹气检测</dt><dd id="face">待开启</dd>
+  </dl>
+  <p id="error" role="alert" hidden></p>
+</section>
+<button class="hud" id="camera" type="button" aria-pressed="false">开启摄像头</button>
+<script type="module">
+import { warmHandAssets } from './rose-music/hand-gestures.js?v=22';
+// 所有长度与轨迹阈值均为 CSS 像素，所有时长均为毫秒。
+const CONFIG = {
+  canvas: { dprMax: 2 },
+  // 雾气透明度、底部暗部和静态冷凝层。
+  fog: { live: .42, idle: .30, shadeStart: .46, shadeAlpha: .24 },
+  drops: {
+    areaPerDrop: 1600, minCount: 260, maxCount: 1200,
+    minRadius: .75, radius: 3.6, largeRadius: 5.6, largeRate: .01,
+    power: 2.8, clusterRate: .20, clusterSpread: 24, downwardPower: .72,
+    trailRate: .045, grainPerDrop: 2
+  },
+  // 笔尖只跟随食指尖（8），笔刷半径仍随掌宽（5 到 17）变化。
+  brush: {
+    tip: 8, palm: [5, 17], palmRatio: .28,
+    // 食指四个关节接近一条直线时才落笔。轻微弯曲允许继续擦拭。
+    indexJoints: [5, 6, 7, 8], minStraightness: .84,
+    min: 12, max: 70, smooth: .78, fastSmooth: .98, fastDistance: 24,
+    spacing: .16, startScale: .62,
+    rampMs: 110, lostMs: 120, idleMs: 260, jump: 110, motion: 3, core: .68
+  },
+  // 双眼间距使用候选动作出现前的滑动均值作基线。
+  breath: {
+    jaw: .4, softJaw: .1, lips: .3, eyeRatio: 1.35, eyes: [33, 263],
+    windowMs: 900, warmupMs: 300, gapMs: 240, sampleMs: 90, holdMs: 200, closeMs: 1800
+  },
+  hud: { idleMs: 5000, fpsMs: 500 },
+  // 辅助画布只给识别模型送帧，镜面继续直接显示原始视频。
+  camera: { width: 1280, height: 720, inferenceEdge: 480 },
+  // 同一版本的模块与 WASM 配对，按顺序尝试 CDN；模型来自 MediaPipe。
+  media: {
+    cdns: [
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21',
+      'https://unpkg.com/@mediapipe/tasks-vision@0.10.21'
+    ],
+    models: 'https://storage.googleapis.com/mediapipe-models'
+  },
+  demo: { samples: 100, radius: .038, duration: 800 }
+};
+
+const params = new URLSearchParams(location.search);
+const demo = params.get('demo') === 'wipe';
+const debug = params.get('debug') === '1';
+const $ = id => document.getElementById(id);
+const video = $('video');
+const inferenceFrame = document.createElement('canvas');
+const inferenceContext = inferenceFrame.getContext('2d', { alpha: false });
+const fog = $('fog');
+const runoff = $('runoff');
+const water = runoff.getContext('2d');
+const button = $('camera');
+const layers = Object.fromEntries(['drops', 'base', 'mask'].map(name =>
+  [name, document.createElement('canvas')]));
+const view = fog.getContext('2d');
+const drops = layers.drops.getContext('2d');
+const base = layers.base.getContext('2d');
+const mask = layers.mask.getContext('2d');
+const clamp = (x, min, max) => Math.max(min, Math.min(max, x));
+const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const mix = (a, b, t) => a + (b - a) * t;
+let w, h, sx, sy, dirty = true, hasMask = false;
+let live = false, opening = false, stream, generation = 0, cameraFrame;
+let lastVideoTime = -1, frames = 0, fpsSince = 0;
+let lastFaceSample = -Infinity;
+const hands = { Left: {}, Right: {} };
+const handTracks = Object.values(hands);
+const isDrawing = () => handTracks.some(track => track.stroke);
+let closingAt = null, maskAlpha = 1;
+let eyeHistory = [], heldAt = null, latched = false, faceAt = -Infinity;
+const tasks = { hand: {}, face: {} };
+
+function ellipse(ctx, x, y, rx, ry, fill) {
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fillStyle = fill;
+  ctx.fill();
+}
+
+function cacheDrops() {
+  const c = CONFIG.drops;
+  const count = Math.round(clamp(w * h / c.areaPerDrop, c.minCount, c.maxCount));
+  const random = Math.random;
+  const centers = [];
+  const largeIndices = new Set();
+  while (largeIndices.size < Math.floor(count * c.largeRate)) {
+    largeIndices.add(Math.floor(random() * count));
+  }
+  for (let i = 0; i < count; i++) {
+    let x = random() * w;
+    let y = Math.pow(random(), c.downwardPower) * h;
+    if (i && random() < c.clusterRate) {
+      const center = centers[Math.floor(random() * centers.length)];
+      x = clamp(center.x + (random() - .5) * c.clusterSpread * 2, 0, w);
+      y = clamp(center.y + (random() - .42) * c.clusterSpread * 2, 0, h);
+    }
+    centers.push({ x, y });
+    const power = random() ** c.power;
+    const r = largeIndices.has(i)
+      ? mix(c.radius, c.largeRadius, power)
+      : mix(c.minRadius, c.radius, power);
+    const strength = clamp(r / 2.4, .29, 1);
+    if (r > 1.6 && random() < c.trailRate) {
+      const length = 3 + random() * 8;
+      const trail = drops.createLinearGradient(x, y - length, x, y);
+      trail.addColorStop(0, 'transparent');
+      trail.addColorStop(1, 'rgba(244,255,252,.29)');
+      drops.strokeStyle = trail;
+      drops.lineWidth = .42;
+      drops.beginPath();
+      drops.moveTo(x - .8, y - length);
+      drops.quadraticCurveTo(x - .5, y - length * .27, x, y);
+      drops.stroke();
+    }
+    const glow = drops.createRadialGradient(x, y, r * .35, x, y, r * 1.48);
+    glow.addColorStop(0, 'rgba(243,255,251,' + .24 * strength + ')');
+    glow.addColorStop(1, 'rgba(243,255,251,0)');
+    ellipse(drops, x, y, r * 1.48, r * 1.48, glow);
+    const bead = drops.createLinearGradient(x, y - r, x, y + r);
+    bead.addColorStop(0, 'rgba(18,42,43,' + .50 * strength + ')');
+    bead.addColorStop(.58, 'rgba(58,87,82,' + .17 * strength + ')');
+    bead.addColorStop(1, 'rgba(245,255,253,' + .79 * strength + ')');
+    const ry = Math.min(r, 4.95);
+    ellipse(drops, x, y, r * .89, ry, bead);
+    drops.beginPath();
+    drops.ellipse(x, y, r * .68, r * .77, 0, Math.PI * .19, Math.PI * .79);
+    drops.lineWidth = Math.min(.6, r * .22);
+    drops.strokeStyle = 'rgba(248,255,254,' + .76 * strength + ')';
+    drops.stroke();
+    ellipse(drops, x - r * .25, y - r * .53, r * .28, r * .12,
+      'rgba(255,255,255,' + .82 * strength + ')');
+  }
+  for (let i = 0; i < count * c.grainPerDrop; i++) {
+    const r = .13 + random() * .35;
+    ellipse(drops, random() * w, random() ** c.downwardPower * h, r, r,
+      'rgba(255,255,255,' + (.08 + random() * .23) + ')');
+  }
+}
+
+function cacheFog() {
+  base.clearRect(0, 0, w, h);
+  base.fillStyle = 'rgba(255,255,255,' + (live ? CONFIG.fog.live : CONFIG.fog.idle) + ')';
+  base.fillRect(0, 0, w, h);
+  const shade = base.createLinearGradient(0, h * CONFIG.fog.shadeStart, 0, h);
+  shade.addColorStop(0, 'rgba(13,35,30,0)');
+  shade.addColorStop(1, 'rgba(13,35,30,' + CONFIG.fog.shadeAlpha + ')');
+  base.fillStyle = shade;
+  base.fillRect(0, 0, w, h);
+  base.drawImage(layers.drops, 0, 0, w, h);
+  dirty = true;
+}
+
+function paint() {
+  if (!dirty) return;
+  view.clearRect(0, 0, w, h);
+  view.drawImage(layers.base, 0, 0, w, h);
+  if (hasMask) {
+    view.globalCompositeOperation = 'destination-out';
+    view.globalAlpha = maskAlpha;
+    view.drawImage(layers.mask, 0, 0, w, h);
+    view.globalAlpha = 1;
+    view.globalCompositeOperation = 'source-over';
+  }
+  dirty = false;
+}
+
+function clearMask() {
+  mask.clearRect(0, 0, w, h);
+  hasMask = false;
+  closingAt = null;
+  maskAlpha = 1;
+  dirty = true;
+}
+
+function liftHand(track) {
+  track.stroke = track.previous = track.anchor = null;
+  track.parked = false;
+  track.missingSince = null;
+}
+
+function lift() {
+  handTracks.forEach(liftHand);
+}
+
+function stopClosing() {
+  if (closingAt === null) return;
+  // 将当前淡出程度写入旧遮罩，接着全强度写入新笔触，避免旧擦痕跳回。
+  mask.globalCompositeOperation = 'destination-out';
+  mask.fillStyle = 'rgba(255,255,255,' + (1 - maskAlpha) + ')';
+  mask.fillRect(0, 0, w, h);
+  mask.globalCompositeOperation = 'source-over';
+  closingAt = null;
+  maskAlpha = 1;
+  dirty = true;
+}
+
+// 复用柔边笔尖，避免每个落点重复创建渐变。
+const brushTip = document.createElement('canvas');
+{
+  const r = Math.ceil(CONFIG.brush.max * CONFIG.canvas.dprMax);
+  brushTip.width = brushTip.height = r * 2;
+  const ctx = brushTip.getContext('2d');
+  const fade = ctx.createRadialGradient(r, r, r * CONFIG.brush.core, r, r, r);
+  fade.addColorStop(0, 'white');
+  fade.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = fade;
+  ctx.fillRect(0, 0, r * 2, r * 2);
+}
+
+function stamp(point, r) {
+  mask.drawImage(brushTip, point.x - r, point.y - r, r * 2, r * 2);
+  hasMask = dirty = true;
+}
+
+function wipe(raw, radius, now, track = hands.Left) {
+  const c = CONFIG.brush;
+  // 两次有效识别间隔变长可能只是推理掉帧。只有实际出现未检出时才开始计时。
+  if ((track.missingSince != null && now - track.missingSince > c.lostMs)
+      || (track.previous && distance(track.previous, raw) > c.jump)) liftHand(track);
+  track.missingSince = null;
+  track.previous = raw;
+  if (!track.anchor || distance(track.anchor, raw) >= c.motion) {
+    track.anchor = raw;
+    track.motionAt = now;
+    track.parked = false;
+  } else if (now - track.motionAt > c.idleMs) {
+    track.stroke = null;
+    track.parked = true;
+  }
+  if (track.parked) return;
+  stopClosing();
+  const stroke = track.stroke;
+  if (!stroke) {
+    const r = radius * c.startScale;
+    stamp(raw, r);
+    track.stroke = { point: raw, dab: raw, r, start: now, remaining: r * c.spacing };
+    return;
+  }
+  const follow = mix(c.smooth, c.fastSmooth, clamp(distance(stroke.point, raw) / c.fastDistance, 0, 1));
+  const point = { x: mix(stroke.point.x, raw.x, follow), y: mix(stroke.point.y, raw.y, follow) };
+  const r = radius * mix(c.startScale, 1, clamp((now - stroke.start) / c.rampMs, 0, 1));
+  const from = stroke.point;
+  const length = distance(from, point);
+  let travel = stroke.remaining;
+  if (length >= travel) {
+    for (; travel <= length;) {
+      const t = travel / length;
+      stroke.dab = { x: mix(from.x, point.x, t), y: mix(from.y, point.y, t) };
+      const dabRadius = mix(stroke.r, r, t);
+      stamp(stroke.dab, dabRadius);
+      travel += dabRadius * c.spacing;
+    }
+  } else if (r > stroke.r) {
+    stamp(stroke.dab, r);
+  }
+  stroke.remaining = travel - length;
+  stroke.point = point;
+  stroke.r = r;
+}
+
+function closeFog(now) {
+  if (!hasMask || isDrawing() || closingAt !== null) return;
+  closingAt = now;
+}
+
+function demoWipe() {
+  const c = CONFIG.demo;
+  const r = clamp(Math.min(w, h) * c.radius, CONFIG.brush.min, CONFIG.brush.max);
+  const start = performance.now() - 2 * c.duration - CONFIG.brush.lostMs;
+  const low = h * .87;
+  const high = h * (w < 500 ? .48 : .26);
+  for (let line = 0; line < 2; line++) {
+    lift();
+    for (let i = 0; i <= c.samples; i++) {
+      const t = i / c.samples;
+      const x = w * (line === 0 ? .65 : .33) + Math.sin(t * 3.8 + line) * w * .026;
+      wipe({ x, y: mix(low, high + line * h * .06, t) }, r,
+        start + (line + t) * c.duration);
+    }
+  }
+  lift();
+}
+
+function resize() {
+  const rect = fog.getBoundingClientRect();
+  const ratio = Math.min(devicePixelRatio || 1, CONFIG.canvas.dprMax);
+  w = Math.max(1, rect.width);
+  h = Math.max(1, rect.height);
+  for (const canvas of [fog, runoff, ...Object.values(layers)]) {
+    canvas.width = Math.max(1, Math.round(w * ratio));
+    canvas.height = Math.max(1, Math.round(h * ratio));
+  }
+  sx = fog.width / w;
+  sy = fog.height / h;
+  for (const ctx of [view, water, drops, base, mask]) ctx.setTransform(sx, 0, 0, sy, 0, 0);
+  lift();
+  clearMask();
+  cacheDrops();
+  cacheFog();
+  if (demo && !live) demoWipe();
+  paint();
+}
+
+function project(point) {
+  // 视频和画布都由 CSS 镜像，因此这里使用镜像前的 cover 坐标。
+  const scale = Math.max(w / video.videoWidth, h / video.videoHeight);
+  const vw = video.videoWidth * scale;
+  const vh = video.videoHeight * scale;
+  return { x: point.x * vw + (w - vw) / 2, y: point.y * vh + (h - vh) / 2 };
+}
+
+function handleHand(result, now) {
+  const c = CONFIG.brush;
+  const seen = new Set();
+  for (const [i, landmarks] of (result?.landmarks ?? []).entries()) {
+    const side = (result.handedness ?? result.handednesses)?.[i]?.[0]?.categoryName;
+    if ((side !== 'Left' && side !== 'Right') || seen.has(side)) continue;
+    const tip = landmarks[c.tip];
+    if (!tip) continue;
+    seen.add(side);
+    const track = hands[side];
+    const world = result.worldLandmarks?.[i];
+    const joints = c.indexJoints.map(index => {
+      if (world?.[index]) return world[index];
+      const point = landmarks[index];
+      return { x: point.x * video.videoWidth, y: point.y * video.videoHeight, z: point.z * video.videoWidth };
+    });
+    const length = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+    const [root, middle, distal, end] = joints;
+    const fingerLength = length(root, middle) + length(middle, distal) + length(distal, end);
+    if (!(length(root, end) > fingerLength * c.minStraightness)) {
+      liftHand(track);
+      continue;
+    }
+    const [a, b] = c.palm.map(index => project(landmarks[index]));
+    wipe(project(tip), clamp(distance(a, b) * c.palmRatio, c.min, c.max), now, track);
+  }
+  for (const [side, track] of Object.entries(hands)) {
+    if (!seen.has(side) && track.previous) track.missingSince ??= now;
+  }
+}
+
+function resetFace() {
+  eyeHistory = [];
+  heldAt = null;
+  latched = false;
+  faceAt = -Infinity;
+}
+
+function handleFace(result, now) {
+  const c = CONFIG.breath;
+  const landmarks = result?.faceLandmarks?.[0];
+  if (!landmarks) {
+    resetFace();
+    return;
+  }
+  if (now - faceAt > c.gapMs) resetFace();
+  faceAt = now;
+  const [a, b] = c.eyes.map(index => project(landmarks[index]));
+  const eye = distance(a, b);
+  const baseline = eyeHistory.length
+    ? eyeHistory.reduce((sum, sample) => sum + sample.eye, 0) / eyeHistory.length
+    : eye;
+  const eyeSurge = eyeHistory.length && now - eyeHistory[0].now >= c.warmupMs
+    && eye >= baseline * c.eyeRatio;
+  if (!eyeSurge) {
+    eyeHistory.push({ eye, now });
+    eyeHistory = eyeHistory.filter(sample => now - sample.now <= c.windowMs);
+  }
+  const scores = Object.fromEntries((result.faceBlendshapes?.[0]?.categories ?? [])
+    .map(({ categoryName, score }) => [categoryName, score]));
+  const jaw = scores.jawOpen ?? 0;
+  const lips = Math.max(scores.mouthPucker ?? 0, scores.mouthFunnel ?? 0);
+  if (!(jaw > c.jaw || (lips > c.lips && jaw > c.softJaw) || eyeSurge)) {
+    heldAt = null;
+    latched = false;
+    return;
+  }
+  heldAt ??= now;
+  if (!latched && now - heldAt >= c.holdMs && !isDrawing()) {
+    latched = true;
+    closeFog(now);
+  }
+}
+
+const sdkLoads = new Map();
+const localVision=new URL('./rose-music/vendor/hand-tracking/',document.baseURI).href.replace(/\/$/,'');
+function loadSdk(root) {
+  if (!sdkLoads.has(root)) {
+    sdkLoads.set(root, (async () => {
+      const sdk = await import(root + '/vision_bundle.mjs');
+      return { sdk, files: await sdk.FilesetResolver.forVisionTasks(root === localVision ? root : root + '/wasm') };
+    })().catch(error => {
+      sdkLoads.delete(root);
+      throw error;
+    }));
+  }
+  return sdkLoads.get(root);
+}
+
+function taskLabel(kind, value) {
+  if ($(kind).textContent !== value) $(kind).textContent = value;
+}
+
+async function loadTask(kind, token, cpuOnly = false) {
+  const task = tasks[kind];
+  const isHand = kind === 'hand';
+  const model = isHand ? 'hand_landmarker' : 'face_landmarker';
+  taskLabel(kind, cpuOnly ? '正在切换至 CPU' : '正在加载');
+  for (const root of [localVision,...CONFIG.media.cdns]) {
+    if (token !== generation) return;
+    try {
+      const { sdk, files } = await loadSdk(root);
+      const Landmarker = isHand ? sdk.HandLandmarker : sdk.FaceLandmarker;
+      for (const delegate of cpuOnly ? ['CPU'] : ['GPU', 'CPU']) {
+        if (token !== generation) return;
+        try {
+          const instance = await Landmarker.createFromOptions(files, {
+            baseOptions: {
+              modelAssetPath: isHand && root===localVision ? localVision+'/hand_landmarker.task'
+                : CONFIG.media.models+'/'+model+'/'+model+'/float16/1/'+model+'.task',
+              delegate
+            },
+            runningMode: 'VIDEO',
+            ...(isHand ? { numHands: 2 } : { numFaces: 1, outputFaceBlendshapes: true })
+          });
+          if (token !== generation) {
+            instance.close();
+            return;
+          }
+          Object.assign(task, { instance, delegate });
+          taskLabel(kind, isHand ? '等待手部' : '可用');
+          return;
+        } catch (error) {
+          if (debug) console.warn(kind, delegate, root, error);
+        }
+      }
+    } catch (error) {
+      if (debug) console.warn(root, error);
+    }
+  }
+  if (token === generation) taskLabel(kind, '不可用 · 模型加载失败');
+}
+
+function infer(kind, now) {
+  const task = tasks[kind];
+  if (!task.instance) return;
+  try {
+    return task.instance.detectForVideo(inferenceFrame, now);
+  } catch (error) {
+    if (debug) console.warn(kind, error);
+    try { task.instance.close(); } catch (closeError) {
+      if (debug) console.warn(closeError);
+    }
+    task.instance = null;
+    if (kind === 'hand') {
+      lift();
+    } else resetFace();
+    if (task.delegate === 'GPU') void loadTask(kind, generation, true);
+    else taskLabel(kind, '不可用 · 推理失败');
+  }
+}
+
+function consumeFrame(now) {
+  frames++;
+  if (!tasks.hand.instance && !tasks.face.instance) return;
+  const scale = Math.min(1, CONFIG.camera.inferenceEdge / Math.max(video.videoWidth, video.videoHeight));
+  const width = Math.max(1, Math.round(video.videoWidth * scale));
+  const height = Math.max(1, Math.round(video.videoHeight * scale));
+  if (inferenceFrame.width !== width || inferenceFrame.height !== height) {
+    inferenceFrame.width = width;
+    inferenceFrame.height = height;
+  }
+  inferenceContext.drawImage(video, 0, 0, width, height);
+  handleHand(infer('hand', now), now);
+  // 擦拭时把推理时间留给指尖，抬笔后恢复吹气检测。
+  if (isDrawing()) {
+    if (heldAt !== null) resetFace();
+    paint();
+    return;
+  }
+  if (now - lastFaceSample >= CONFIG.breath.sampleMs) {
+    lastFaceSample = now;
+    handleFace(infer('face', now), now);
+  }
+}
+
+function startVideoFrames(token) {
+  if (!video.requestVideoFrameCallback) return;
+  const next = now => {
+    if (token !== generation || !live) return;
+    if (video.readyState >= 2 && video.videoWidth) consumeFrame(now);
+    cameraFrame = video.requestVideoFrameCallback(next);
+  };
+  cameraFrame = video.requestVideoFrameCallback(next);
+}
+
+function stopCamera() {
+  generation++;
+  opening = live = false;
+  if (cameraFrame !== undefined) video.cancelVideoFrameCallback(cameraFrame);
+  cameraFrame = undefined;
+  stream?.getTracks().forEach(track => track.stop());
+  stream = null;
+  video.srcObject = null;
+  video.classList.remove('live');
+  for (const task of Object.values(tasks)) {
+    task.instance?.close();
+    task.instance = null;
+  }
+  lastVideoTime = -1;
+  lastFaceSample = -Infinity;
+  frames = 0;
+  lift();
+  resetFace();
+  clearMask();
+  cacheFog();
+  if (demo) demoWipe();
+  button.textContent = '开启摄像头';
+  button.setAttribute('aria-pressed', 'false');
+  $('fps').textContent = '—';
+  $('status').textContent = demo ? '演示 · 两笔擦痕' : '摄像头关闭';
+  taskLabel('hand', '待开启');
+  taskLabel('face', '待开启');
+}
+
+async function startCamera() {
+  const token = ++generation;
+  opening = true;
+  warmHandAssets(localVision+'/');
+  void loadSdk(localVision).catch(()=>{});
+  $('error').hidden = true;
+  $('status').textContent = '正在请求摄像头';
+  button.textContent = '取消开启';
+  try {
+    if (!isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error('insecure');
+    const input = await navigator.mediaDevices.getUserMedia({
+      audio: false, video: { facingMode: 'user', width: { ideal: CONFIG.camera.width }, height: { ideal: CONFIG.camera.height } }
+    });
+    if (token !== generation) {
+      input.getTracks().forEach(track => track.stop());
+      return;
+    }
+    stream = input;
+    const track = input.getVideoTracks()[0];
+    track.addEventListener('ended', () => {
+      if (token !== generation) return;
+      stopCamera();
+      cameraError('摄像头连接已断开。');
+    }, { once: true });
+    video.srcObject = input;
+    await video.play();
+    if (token !== generation) return;
+    opening = false;
+    live = true;
+    fpsSince = performance.now();
+    video.classList.add('live');
+    lift();
+    clearMask();
+    cacheFog();
+    button.textContent = '关闭摄像头';
+    button.setAttribute('aria-pressed', 'true');
+    void loadTask('hand', token).then(() => { if(token===generation) void loadTask('face', token); });
+    startVideoFrames(token);
+  } catch (error) {
+    if (token !== generation) return;
+    stopCamera();
+    const messages = {
+      NotAllowedError: '摄像头权限未授予，请在浏览器中允许访问。',
+      NotFoundError: '没有找到可用的摄像头。',
+      NotReadableError: '摄像头可能被占用，或系统禁止了访问。'
+    };
+    cameraError(messages[error.name] ?? '无法开启摄像头。');
+    if (debug) console.warn(error);
+  }
+}
+
+function cameraError(message) {
+  $('status').textContent = '摄像头不可用';
+  $('error').textContent = message + ' 请用 HTTPS 或 localhost 打开。可在 HTML 所在目录运行 python3 -m http.server，再访问 http://localhost:8000。';
+  $('error').hidden = false;
+}
+
+const motionPreference=matchMedia('(prefers-reduced-motion: reduce)');
+const movingDrops=[];
+let previousWaterFrame;
+let lastPaintedWaterFrame;
+function newDrop(drop,ready=false) {
+  const random=Math.random;
+  drop.x=.025+random()*.95;
+  drop.y=ready ? random()*.86 : -.05+random()*.62;
+  drop.radius=1.15+Math.pow(random(),1.65)*3.2;
+  drop.phase=random()*Math.PI*2;
+  drop.speed=14+random()*28+drop.radius*10;
+  drop.wait=ready ? random()*.9 : .5+random()*5;
+}
+function paintRunoff(now) {
+  if (motionPreference.matches) {
+    if (previousWaterFrame!==undefined) water.clearRect(0,0,w,h);
+    previousWaterFrame=lastPaintedWaterFrame=undefined;
+    return;
+  }
+  if (lastPaintedWaterFrame!==undefined && now-lastPaintedWaterFrame<30) return;
+  const dt=previousWaterFrame===undefined?0:Math.min((now-previousWaterFrame)*.001,.075);
+  previousWaterFrame=lastPaintedWaterFrame=now;
+  if(!movingDrops.length) {
+    const total=clamp(Math.round(w*h/55000),10,24);
+    for(let i=0;i<total;i++) {
+      const drop={};
+      newDrop(drop,true);
+      movingDrops.push(drop);
+    }
+  }
+  water.clearRect(0,0,w,h);
+  for(const drop of movingDrops){
+    if(drop.wait>0){drop.wait-=dt;continue;}
+    drop.y+=dt*drop.speed*(.86+.14*Math.sin(drop.y*26+drop.phase))/h;
+    if(drop.y>1.065){newDrop(drop);continue;}
+    if(drop.y<-.02) continue;
+    const y=drop.y*h,r=drop.radius;
+    const waviness=(y)=>Math.sin(y*.035+drop.phase)*1.75+Math.sin(y*.012-drop.phase)*2;
+    const x=drop.x*w+waviness(y);
+    const length=10+r*7+drop.speed*.16;
+    const tail=water.createLinearGradient(x,y-length,x,y);
+    tail.addColorStop(0,'rgba(213,247,240,0)');
+    tail.addColorStop(.66,'rgba(220,254,250,.15)');
+    tail.addColorStop(1,'rgba(241,255,251,.60)');
+    water.strokeStyle=tail;
+    water.lineWidth=.5+r*.18;
+    water.beginPath();
+    for(let i=0;i<=8;i++){
+      const yp=y-length+i*length/8;
+      const xp=drop.x*w+waviness(yp);
+      if(i===0) water.moveTo(xp,yp);else water.lineTo(xp,yp);
+    }
+    water.stroke();
+    const bead=water.createLinearGradient(x,y-r*1.4,x,y+r*1.4);
+    bead.addColorStop(0,'rgba(243,255,255,.75)');
+    bead.addColorStop(.39,'rgba(226,255,250,.27)');
+    bead.addColorStop(.76,'rgba(20,52,48,.62)');
+    bead.addColorStop(1,'rgba(196,239,235,.8)');
+    ellipse(water,x,y,r*.76,r*1.32,bead);
+    ellipse(water,x-r*.25,y-r*.53,r*.23,r*.20,'rgba(255,255,255,.88)');
+  }
+}
+
+function render(now) {
+  if (live && !video.requestVideoFrameCallback && video.readyState >= 2
+      && video.videoWidth && video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+    consumeFrame(now);
+  }
+  for (const track of handTracks) {
+    if (track.missingSince != null && now - track.missingSince > CONFIG.brush.lostMs) liftHand(track);
+  }
+  if (closingAt !== null) {
+    maskAlpha = 1 - clamp((now - closingAt) / CONFIG.breath.closeMs, 0, 1);
+    dirty = true;
+    if (!maskAlpha) clearMask();
+  }
+  if (live) {
+    if (now - fpsSince >= CONFIG.hud.fpsMs) {
+      $('fps').textContent = (1000 * frames / (now - fpsSince)).toFixed(1) + ' fps';
+      frames = 0;
+      fpsSince = now;
+    }
+    taskLabel('status', isDrawing() ? '正在擦拭' : closingAt !== null ? '雾气正在合拢' : '镜面实时画面');
+    if (tasks.hand.instance) {
+      const count = handTracks.filter(track => track.previous && track.missingSince === null).length;
+      taskLabel('hand', count ? `已识别 ${count} 根食指` : '请伸出食指');
+    }
+  }
+  paint();
+  paintRunoff(now);
+  requestAnimationFrame(render);
+}
+
+let idleTimer;
+function wake() {
+  document.body.classList.remove('idle');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => document.body.classList.add('idle'), CONFIG.hud.idleMs);
+}
+for (const event of ['pointermove', 'pointerdown', 'keydown']) addEventListener(event, wake, { passive: true });
+button.addEventListener('click', () => {
+  if (live || opening) stopCamera();
+  else void startCamera();
+});
+const surface=document.querySelector('main');
+const mouseTrack={};
+let wiping;
+function mouseWipe(event){
+  const box=surface.getBoundingClientRect();
+  wipe({x:w-(event.clientX-box.left),y:event.clientY-box.top},30,performance.now(),mouseTrack);
+}
+surface.addEventListener('pointerdown',event=>{
+  if(event.button!==0 || wiping!==undefined) return;
+  wiping=event.pointerId;
+  surface.setPointerCapture(wiping);
+  mouseWipe(event);
+});
+surface.addEventListener('pointermove',event=>{if(event.pointerId===wiping)mouseWipe(event);});
+for (const type of ['pointerup','pointercancel','lostpointercapture']) {
+  surface.addEventListener(type,event=>{
+    if(event.pointerId!==wiping)return;
+    wiping=undefined;
+    liftHand(mouseTrack);
+  });
+}
+button.addEventListener('pointerenter',()=>warmHandAssets(localVision+'/'),{once:true});
+button.addEventListener('focus',()=>warmHandAssets(localVision+'/'),{once:true});
+addEventListener('pagehide', () => { if (live || opening) stopCamera(); });
+addEventListener('resize', resize);
+video.addEventListener('resize', () => {
+  lift();
+});
+resize();
+if (demo) $('status').textContent = '演示 · 两笔擦痕';
+wake();
+requestAnimationFrame(render);
+
+if (debug) {
+  Object.defineProperty(window, 'mirrorDebug', { value: {
+    config: CONFIG,
+    // 调试输入采用屏幕坐标，转换回画布镜像前的坐标。
+    wipe: (x, y, radius = CONFIG.brush.min, now = performance.now()) =>
+      wipe({ x: w - x, y }, clamp(radius, CONFIG.brush.min, CONFIG.brush.max), now),
+    lift,
+    blow: () => closeFog(performance.now()),
+    clear: () => { lift(); clearMask(); },
+    demo: () => { clearMask(); demoWipe(); },
+    state: () => ({
+      width: w, height: h, dpr: [sx, sy], live, hasMask, maskAlpha,
+      drawing: isDrawing(), closing: closingAt !== null,
+      delegates: { hand: tasks.hand.delegate, face: tasks.face.delegate }
+    })
+  } });
+}
+</script>
+</body>
+</html>

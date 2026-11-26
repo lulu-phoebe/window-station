@@ -1,0 +1,30 @@
+import * as THREE from './vendor/three.module.js';
+import {envelopeMaterials,printedMaterial} from './envelope-materials.js';
+export const BUILD_PASS='interaction-pass';
+export function paperProfile(width,height){const x=-width/2,y=-height/2,r=.045,s=new THREE.Shape();s.moveTo(x+r,y);s.lineTo(x+width-r,y);s.quadraticCurveTo(x+width,y,x+width,y+r);s.lineTo(x+width,y+height-r);s.quadraticCurveTo(x+width,y+height,x+width-r,y+height);s.lineTo(x+r,y+height);s.quadraticCurveTo(x,y+height,x,y+height-r);s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);return s}
+export function paperPart(shape,material,name,depth=.014){const geometry=new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:true,bevelSize:.006,bevelThickness:.003,bevelSegments:2,curveSegments:8});const uv=geometry.attributes.uv,p=geometry.attributes.position;for(let i=0;i<uv.count;i++)uv.setXY(i,(p.getX(i)+1.8)/3.6,(p.getY(i)+1.175)/2.35);uv.needsUpdate=true;const mesh=new THREE.Mesh(geometry,material);mesh.name=name;mesh.castShadow=true;mesh.receiveShadow=true;mesh.userData.partId=name;mesh.userData.home=mesh.position.clone();return mesh}
+export function createEnvelopeModel(variant=0,options={}){
+ const root=new THREE.Group();root.name='handcrafted-envelope-'+variant;
+ const materials=envelopeMaterials(variant,options),mat=materials.paper;
+ const body=paperPart(paperProfile(3.6,2.35),mat,'root',.034);root.add(body);
+ const shape=new THREE.Shape();shape.moveTo(-1.8,1.175);shape.lineTo(1.8,1.175);shape.lineTo(.14,-.19);shape.quadraticCurveTo(0,-.28,-.14,-.19);shape.closePath();
+ const flap=paperPart(shape,mat.clone(),'flap',.012);flap.geometry.translate(0,-1.175,0);const hinge=new THREE.Group();hinge.name='flap-hinge';hinge.position.set(0,1.175,.055);hinge.add(flap);root.add(hinge);root.userData.hinge=hinge;
+ const nodes={root:body,flap};
+ const overlap=new THREE.Shape();overlap.moveTo(-1.79,-1.16);overlap.lineTo(1.79,-1.16);overlap.lineTo(0,.10);overlap.closePath();const rear=paperPart(overlap,mat.clone(),'rear-overlap',.009);rear.position.z=.043;root.add(rear);nodes['rear-overlap']=rear;
+ const trim=materials.band;
+ const band=new THREE.Group();band.name='band';for(const z of [.078,-.018]){const strip=new THREE.Mesh(new THREE.BoxGeometry(1.02,2.36,.014),trim);strip.position.z=z;strip.name='band-face-'+z;strip.castShadow=true;band.add(strip)}for(const y of [-1.175,1.175]){const edge=new THREE.Mesh(new THREE.BoxGeometry(1.02,.018,.11),trim);edge.position.set(0,y,.027);edge.name='band-edge-'+y;band.add(edge)}root.add(band);nodes.band=band;
+ if(materials.maps){const print=new THREE.Mesh(new THREE.PlaneGeometry(.97,2.30),printedMaterial('news'));print.name='band-print';print.position.z=.087;band.add(print)}
+ const cordMat=materials.cord;
+ function cord(path,name,radius=.025,segments=64){const curve=new THREE.CatmullRomCurve3(path.map(p=>new THREE.Vector3(...p)));const mesh=new THREE.Mesh(new THREE.TubeGeometry(curve,segments,radius,10,false),cordMat);mesh.name=name;mesh.castShadow=true;mesh.receiveShadow=true;return mesh}
+ const loopGroup=new THREE.Group();loopGroup.name='cord-loops';
+ loopGroup.add(cord([[0,0,.15],[-.45,.32,.18],[-1.05,.28,.17],[-1.12,.04,.14],[-.6,-.05,.15],[0,0,.15]],'bow-loop-left'));
+ loopGroup.add(cord([[0,0,.15],[.35,.62,.19],[.85,.65,.18],[.84,.32,.15],[.4,.08,.15],[0,0,.15]],'bow-loop-right'));
+ loopGroup.add(cord([[0,-1.17,.10],[0,-.7,.10],[0,.1,.13],[0,1.17,.10],[0,1.2,.02],[0,1.17,-.035],[0,-1.17,-.035],[0,-1.2,.02],[0,-1.17,.10]],'cord-wrap',.021,64));root.add(loopGroup);nodes['cord-loops']=loopGroup;
+ const knot=new THREE.Mesh(new THREE.SphereGeometry(.065,24,16),cordMat);knot.name='knot';knot.scale.set(.8,1.1,.7);knot.position.set(0,0,.17);knot.castShadow=true;root.add(knot);nodes.knot=knot;
+ const tails=new THREE.Group();tails.name='cord-tails';tails.add(cord([[0,0,.17],[-.45,-.07,.14],[-1,-.16,.13],[-1.65,-.22,.13]],'tail-left'));tails.add(cord([[0,0,.17],[.55,-.16,.14],[1.1,-.36,.13],[1.65,-.42,.14]],'tail-right'));root.add(tails);nodes['cord-tails']=tails;
+ if(variant===1||variant===3||variant===4){band.visible=false;loopGroup.visible=false;knot.visible=false;tails.visible=false;const collage=new THREE.Group();collage.name='collage';const label=new THREE.Mesh(new THREE.BoxGeometry(1.32,.73,.014),materials.label);label.position.set(.78,-.62,.07);label.rotation.z=.06;label.name='typed-label';collage.add(label);const stamp=new THREE.Mesh(new THREE.BoxGeometry(.60,.73,.012),materials.label.clone());stamp.position.set(-1.2,.65,.072);stamp.rotation.z=.04;stamp.name='postage-stamp';collage.add(stamp);if(materials.maps){for(const [target,w,h,kind]of [[label,1.30,.71,'label'],[stamp,.56,.69,'stamp']]){const face=new THREE.Mesh(new THREE.PlaneGeometry(w,h),printedMaterial(kind,variant));face.name=kind+'-ink';face.position.z=.009;target.add(face)}}root.add(collage);nodes.collage=collage;}
+ const fibers=new THREE.InstancedMesh(new THREE.BoxGeometry(.0015,.012,.0008),new THREE.MeshStandardMaterial({color:variant===0?'#8d7b69':'#ac9c83',roughness:1}),140);fibers.name='fiber-detail';let seed=815+variant;const rand=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296};const dummy=new THREE.Object3D();for(let i=0;i<140;i++){dummy.position.set((rand()-.5)*3.48,(rand()-.5)*2.23,.071);dummy.rotation.z=rand()*Math.PI;dummy.scale.set(1,.4+rand(),1);dummy.updateMatrix();fibers.setMatrixAt(i,dummy.matrix)}root.add(fibers);nodes['fiber-detail']=fibers;
+ root.userData.sculptRuntime={nodes,meshes:nodes,sockets:{surface:new THREE.Vector3(0,0,.04)},colliders:[{type:'box',width:3.6,height:2.35,depth:.24}],destructionGroups:{shell:['root'],closure:['flap'],trim:['band','cord-loops','knot','cord-tails','collage','fiber-detail']}};
+ return root;
+}
+export function setEnvelopeOpen(root,progress){const t=THREE.MathUtils.clamp(progress,0,1);root.userData.hinge.rotation.x=-t*Math.PI*.88;for(const id of ['band','cord-loops','knot','cord-tails']){const n=root.userData.sculptRuntime.nodes[id];if(n){n.scale.setScalar(1+t*.15);n.position.z=t*.6;n.visible=t<.85&&![1,3,4].some(i=>root.name.endsWith('-'+i))}}}

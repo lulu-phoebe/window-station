@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>窗边显影室</title><link rel="stylesheet" href="photo-room.css?v=38"><script src="photo-room.js?v=38" defer></script></head>
+<body><main class="room">
+<header><a href="./?photos=38">← 返回窗边</a><a href="#album" id="album-link">看相册</a></header>
+<section class="worktop"><div class="camera-side"><h1>窗边显影室</h1><p>按快门放进几张相纸。选中一张，往上拖出水面。</p>
+<div class="camera" aria-hidden="true"><span class="finder"></span><span class="lens"></span><span class="slot"></span><span class="stripe"></span></div>
+<button id="shutter" type="button">按下快门</button><p id="photo-status" role="status"></p></div>
+<div class="print-side"><div id="water-basin" class="water-basin"><div class="water-surface" aria-hidden="true"></div><div id="floating-prints" role="group" aria-label="水里的相片"></div><div id="scoop-net" aria-hidden="true" hidden></div><button id="paper" type="button" aria-label="放大捞出的照片" hidden><span class="film"><img id="developing" alt="" draggable="false"></span><span id="print-label">等待出片</span><span class="tongs" aria-hidden="true"></span></button></div>
+<button id="hang-photo" type="button" hidden>挂到相片绳</button></div></section>
+<section id="album" aria-labelledby="album-title" tabindex="-1"><h2 id="album-title">窗边相册 <span id="tally">0 / 6</span></h2><p id="album-empty">把捞起来的照片挂到这里。</p><div id="line"></div></section>
+</main><dialog id="large"><form method="dialog"><button type="submit" aria-label="关闭照片" autofocus>×</button></form><img id="large-image" alt=""><p id="large-label"></p></dialog></body></html>

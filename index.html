@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="用鼠标探索窗边书桌，指向物件，看看它们轻轻浮起来。">
+<title>窗边小站</title>
+<link rel="stylesheet" href="desk.css?v=19">
+<script type="module" src="desk.js?v=38"></script>
+  <link rel="prefetch" href="bathroom-mirror.html?drops=22" as="document">
+</head>
+<body>
+<main>
+  <div id="room-scroll" tabindex="0" aria-label="窗边场景，窄屏可左右滑动">
+    <section class="room" aria-label="窗边书桌">
+      <img class="room-image" src="window-room.png" alt="暖白窗光照进房间，落在雾蓝书桌、玫瑰和拍立得上。" width="1672" height="941" fetchpriority="high">
+      <div class="atmosphere" aria-hidden="true">
+        <div class="curtain left"></div>
+        <div class="curtain right"></div>
+        <div class="sunbeams"></div>
+        <div class="leaf-light"></div>
+        <div class="dust"></div>
+      </div>
+      <div id="hotspots"></div>
+    </section>
+  </div>
+  <div id="viewport" hidden></div>
+  <header>
+    <div class="controls">
+      <select id="season" aria-label="窗外季节" disabled>
+        <option value="spring">春 · 樱花</option><option value="summer" selected>夏 · 绿叶</option>
+        <option value="autumn">秋 · 枫与银杏</option><option value="winter">冬 · 雪</option>
+      </select>
+      <button id="nanjing-weather" aria-pressed="true">此刻的南京</button>
+      <button id="weather" aria-pressed="true" title="暂停窗边动效">风与光</button>
+      <button id="orbit" aria-pressed="false">效果图</button>
+      <details id="item-menu"><summary>桌上小物</summary><nav aria-label="桌上小物"></nav></details>
+    </div>
+    <div id="nanjing-data"><span id="nanjing-status" role="status">正在读取南京天气…</span><div id="nanjing-meta"><span id="nanjing-updated"></span><a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener" aria-label="天气数据来源 Open-Meteo">Open-Meteo</a></div></div>
+  </header>
+  <p id="status" role="status">正在载入 3D 房间…</p>
+  <div id="inspection" hidden><span></span><button id="inspect-detail" hidden>看火漆细节</button><button id="put-back">放回桌上</button></div>
+</main>
+<dialog id="details">
+  <h2></h2>
+  <div class="held" aria-hidden="true"><div class="held-cutout"></div></div>
+  <img class="envelope" src="Envelope-detail.png" alt="烫金星图、山线和玫瑰火漆的信封特写" width="850" height="600" hidden loading="lazy">
+  <div class="detail-controls">
+    <button id="envelope-detail" aria-pressed="false" hidden>看火漆细节</button>
+    <form method="dialog"><button>放回桌上</button></form>
+  </div>
+</dialog>
+<dialog id="book-story" aria-label="寻回感 · 感知庭园">
+  <form method="dialog"><button aria-label="合上书">×</button></form>
+  <div class="story-stage">
+    <div class="story-book">
+      <div class="story-page left-page" aria-hidden="true">✦</div>
+      <div class="story-page story-right"><span aria-hidden="true">✧</span><h2>寻回感<br>感知庭园</h2></div>
+      <div class="story-cover" aria-hidden="true">✦</div>
+    </div>
+  </div>
+  <a href="sensory-garden/">进入感知庭园</a>
+</dialog>
+</body>
+</html>

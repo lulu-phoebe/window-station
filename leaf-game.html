@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>接住窗外的风</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100svh;display:grid;place-items:center;background:radial-gradient(ellipse at 28% 6%,#586970,#2a363d 68%);color:#f7ead1;font-family:system-ui,sans-serif}
+main{width:min(94vw,700px);padding:clamp(.75rem,3vw,1.5rem);border:1px solid #9fa99c90;border-radius:1.5rem;background:#303e42;box-shadow:inset 0 0 0 5px #d0d9cd12,0 1.25rem 4rem #152024a8}header,.hud{display:flex;justify-content:space-between;align-items:center;gap:.8rem;flex-wrap:wrap}
+a,button{font:inherit;color:inherit;background:#35474b;border:1px solid #f1d3a650;border-radius:.6rem;padding:.55rem .8rem;text-decoration:none;cursor:pointer}
+:focus-visible{outline:2px solid #ffd795;outline-offset:3px}h1{font:400 clamp(1.65rem,6vw,3.1rem)/1.25 Georgia,serif;margin:1.15rem 0 .55rem}
+.hud{margin-bottom:.45rem;font-variant-numeric:tabular-nums}.screen{position:relative;border:5px solid #6b7773;border-radius:1rem;overflow:hidden;background:#424c52}
+canvas{display:block;width:100%;height:min(55svh,460px);touch-action:none}
+.panel{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;text-align:center;padding:1rem;background:#19272dbb}.panel[hidden]{display:none}
+.panel p{font-size:1.12rem;margin:0 0 1rem}.panel button{background:#f0d2a0;color:#292c2c;min-width:7.5rem}
+footer{display:flex;justify-content:space-between;gap:.55rem;align-items:center;padding-top:.65rem;color:#e3d1b7;font-size:.85rem}footer button{min-width:3.2rem;touch-action:none}
+
+body{background:radial-gradient(ellipse at 20% 10%,#fff0cf,#acc7d3);color:#324e5a}
+main{background:linear-gradient(140deg,#fff9ec,#c7dce0);border-color:#edf6ed;box-shadow:inset 0 0 0 5px #ffffff80,0 1.25rem 4rem #47677752}
+a,button{background:#f7f3e7;color:#365765;border-color:#9aacad;box-shadow:0 2px 0 #7493a64d}
+.screen{border-color:#eaf1e7;box-shadow:0 3px 12px #5b7d8b4a}
+.panel{background:#ffefdca7;color:#314c53}.panel p{text-shadow:0 1px #fff}.panel button{border-color:#ae9276}
+footer{color:#3e606b}
+body{background:linear-gradient(135deg,#fff0cbaa,#8caebbcc),url("./window-room.png") center/cover fixed}.screen{box-shadow:0 3px 12px #5b7d8b4a,inset 0 0 0 4px #fff3}.panel{backdrop-filter:blur(2px)}
+</style>
+<script src="leaf-game.js?v=29" defer></script>
+</head>
+<body><main>
+<header><nav style="display:flex;gap:.5rem;flex-wrap:wrap"><a href="./arcade.html?glow=36">← 游戏列表</a><a href="./?arcade=36">返回书桌</a></nav><button id="sound" type="button" aria-pressed="true">声音 · 开</button></header>
+<h1>接住窗外的风</h1>
+<div class="hud"><span>接住 <b id="score">0</b> 片</span><span>剩余 <b id="time">30</b> 秒</span></div>
+<div class="screen">
+<canvas width="640" height="440" aria-label="接落叶游戏画面"></canvas>
+<div class="panel"><p id="message" role="status">每接住一片叶子，听见一个音符。</p><button id="start" type="button">开始游戏</button></div>
+</div>
+<footer><button type="button" data-direction="-1" aria-label="向左移动">←</button><span>左右键移动，也可以在画面上拖动</span><button type="button" data-direction="1" aria-label="向右移动">→</button></footer>
+</main></body></html>
