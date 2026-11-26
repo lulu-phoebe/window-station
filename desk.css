@@ -128,3 +128,19 @@ header{flex-direction:column;align-items:flex-end;gap:8px}
 #nanjing-updated:empty{display:none}
 #nanjing-meta a{margin-left:auto;color:#385960;text-underline-offset:.17em;white-space:nowrap;pointer-events:auto}
 @media(max-width:600px){#nanjing-data{padding:.4rem .6rem;font-size:.72rem}#nanjing-meta{font-size:.64rem}}
+
+/* 加载动画：四格窗依次亮起，背后一圈暖光 */
+#boot{position:fixed;inset:0;z-index:80;display:grid;place-items:center;background:#f3efe6;transition:opacity .7s ease,visibility .7s}
+#boot.done{opacity:0;visibility:hidden}
+#boot .inner{display:flex;flex-direction:column;align-items:center}
+#boot .win{position:relative;display:grid;grid-template-columns:repeat(2,1fr);gap:4px;width:64px;height:64px;padding:6px;border:1.5px solid rgba(43,58,51,.42);border-radius:3px}
+#boot .win::after{content:"";position:absolute;inset:-46px;z-index:-1;border-radius:50%;background:radial-gradient(circle,rgba(255,228,188,.85),rgba(255,228,188,0) 70%);animation:boot-glow 2.2s ease-in-out infinite;pointer-events:none}
+#boot .win i{background:#2b3a33;opacity:.12;animation:pane 2.2s ease-in-out infinite}
+#boot .win i:nth-child(1){animation-delay:0s}
+#boot .win i:nth-child(2){animation-delay:.2s}
+#boot .win i:nth-child(3){animation-delay:.4s}
+#boot .win i:nth-child(4){animation-delay:.6s}
+@keyframes pane{0%,100%{opacity:.10;background:#2b3a33}32%{opacity:.92;background:#e9cf9f}58%{opacity:.34;background:#2b3a33}}
+@keyframes boot-glow{0%,100%{opacity:.15;transform:scale(.92)}35%{opacity:.62;transform:scale(1.04)}}
+#boot .t{margin-top:18px;font:11px/1 "Songti SC","SimSun",serif;letter-spacing:.4em;text-indent:.4em;color:rgba(43,58,51,.62)}
+@media (prefers-reduced-motion:reduce){#boot .win i{animation:none;opacity:.45}#boot .win::after{animation:none;opacity:.25}}

@@ -5,11 +5,17 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="用鼠标探索窗边书桌，指向物件，看看它们轻轻浮起来。">
 <title>窗边小站</title>
-<link rel="stylesheet" href="desk.css?v=19">
-<script type="module" src="desk.js?v=40"></script>
+<link rel="stylesheet" href="desk.css?v=20">
+<script type="module" src="desk.js?v=42"></script>
   <link rel="prefetch" href="bathroom-mirror.html?drops=22" as="document">
 </head>
 <body>
+<div id="boot" aria-hidden="true">
+  <div class="inner">
+    <div class="win"><i></i><i></i><i></i><i></i></div>
+    <div class="t">窗 边 小 站</div>
+  </div>
+</div>
 <main>
   <div id="room-scroll" tabindex="0" aria-label="窗边场景，窄屏可左右滑动">
     <section class="room" aria-label="窗边书桌">
@@ -61,5 +67,26 @@
   </div>
   <a href="sensory-garden/">进入感知庭园</a>
 </dialog>
+<script>
+(function () {
+  var b = document.getElementById('boot');
+  if (!b) return;
+  var img = document.querySelector('.room-image');
+  var closed = false;
+  function done() {
+    if (closed) return;
+    closed = true;
+    b.classList.add('done');
+    setTimeout(function () { if (b && b.parentNode) b.parentNode.removeChild(b); }, 900);
+  }
+  if (img && !img.complete) {
+    img.addEventListener('load', done, { once: true });
+    img.addEventListener('error', done, { once: true });
+  } else {
+    setTimeout(done, 400);
+  }
+  setTimeout(done, 7000);
+})();
+</script>
 </body>
 </html>
