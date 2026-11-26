@@ -76,7 +76,12 @@ function openPhotoRoom(id) {
   location.assign(new URL('./photo-room.html?view=38'+(id==='photos'?'#album':''),document.baseURI));
 }
 
+const deskPlayPages = {cassette:'desk-tape.html?view=40',note:'desk-note.html',pencil:'desk-note.html'};
+function openDeskPlay(id) {
+  location.assign(new URL('./'+deskPlayPages[id],document.baseURI));
+}
 function showItem(id) {
+  if (deskPlayPages[id]) return openDeskPlay(id);
   if (id==='camera'||id==='photos') return openPhotoRoom(id);
   if (id === 'computer') return openArcade();
   if (id === 'letter') return openLetters();
@@ -162,6 +167,7 @@ const guide = '移动或拖动鼠标转视角 · 指向小物看它浮起 · 按
 let selected;
 
 function onInspect(id) {
+  if (deskPlayPages[id]) return openDeskPlay(id);
   if (id==='camera'||id==='photos') return openPhotoRoom(id);
   if (id === 'computer') return openArcade();
   if (id === 'letter') return openLetters();
@@ -184,6 +190,10 @@ function onInspect(id) {
   if (id) inspection.querySelector('span').textContent = items[id][0];
 }
 function onHover(id) {
+  if (viewerActive && deskPlayPages[id]) {
+    status.textContent=id==='cassette'?'磁带 · 点击听声音':'便签 · 点击写字或画画';
+    return;
+  }
   if (viewerActive && (id==='camera'||id==='photos')) {
     status.textContent=id==='camera'?'拍立得 · 点击进入显影室':'拍立得照片 · 点击翻看相册';
     return;

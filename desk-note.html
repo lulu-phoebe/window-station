@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>桌角便签</title><link rel="stylesheet" href="desk-play.css">
+<body><main><a href="./?play=39">← 返回书桌</a><h1>桌角便签</h1>
+<div class="paper"><textarea id="words" aria-label="便签内容" placeholder="写几句话…" maxlength="2500"></textarea><canvas id="drawing" width="680" height="340" aria-label="在这里涂画"></canvas></div>
+<div class="controls"><label>笔色 <input type="color" id="ink" value="#526c76"></label><button id="undo" disabled>撤销一笔</button><button id="eraser" aria-pressed="false">橡皮擦</button></div>
+<p id="status" role="status">文字和涂画保存在这个浏览器里。</p></main><script src="desk-note.js"></script></body></html>

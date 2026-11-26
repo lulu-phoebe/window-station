@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>磁带里的声音</title><link rel="stylesheet" href="desk-play.css"><link rel="stylesheet" href="desk-tape.css?v=40"><script type="module" src="desk-tape-reels.js?v=40"></script></head>
+<body class="tape-page"><main><a href="./?play=40">← 返回书桌</a><h1>磁带里的声音</h1>
+<div id="tape-model" aria-label="可旋转的三维磁带"></div>
+<p class="instructions">拖动外壳转视角，拖动卷轴倒带或快进。</p>
+<canvas id="signal" width="880" height="86" aria-label="声音波形"></canvas>
+<div class="controls"><button id="back" type="button">上一段</button><button id="play" type="button">播放</button><button id="next" type="button">下一段</button></div>
+<label class="readout">磁带位置 <input id="position" type="range" min="0" max="18" step=".05" value="0"><output id="counter">0.0 / 18 秒</output></label>
+<p id="status" role="status">窗外细雨</p></main></body></html>

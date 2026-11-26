@@ -1,0 +1,17 @@
+*{box-sizing:border-box}
+body{margin:0;min-height:100svh;display:grid;place-items:center;padding:1.2rem;color:#263e48;background:linear-gradient(130deg,#eadbb88c,#476878b8),url('./window-room.png') center/cover fixed;font:16px system-ui,sans-serif}
+main{width:min(100%,650px);padding:clamp(1.1rem,5vw,2.5rem);background:#fcf2ddec;border:1px solid #fff8e5;border-radius:1.15rem;box-shadow:0 18px 50px #213e4a55}
+a{color:inherit;text-underline-offset:.24em}h1{font:500 clamp(2rem,6vw,3.55rem)/1.1 "Songti SC",STSong,SimSun,serif;margin:1rem 0 1.4rem}
+.controls{display:flex;align-items:center;flex-wrap:wrap;gap:.55rem;margin:1rem 0}
+button{font:inherit;color:#304b54;background:#fff6e3;border:1px solid #728f97;border-radius:.5rem;padding:.45rem .75rem;cursor:pointer}
+button[aria-pressed=true],#play{background:#42636c;color:#fff7e7}
+button:disabled{opacity:.5;cursor:default}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #976440;outline-offset:3px}
+input[type=range]{width:min(55%,235px);accent-color:#52747c;vertical-align:middle}
+.cassette{width:min(100%,390px);height:clamp(130px,32vw,206px);position:relative;display:flex;align-items:center;justify-content:center;gap:19%;border:7px solid #456571;border-radius:1rem;background:linear-gradient(160deg,#faf3d1 0 28%,#799da5 29% 72%,#395967 73%);box-shadow:inset 0 0 0 2px #d6ddc9,0 10px 21px #28424e55}
+.cassette:before{content:"";position:absolute;width:73%;height:34%;background:#28434e;border:3px solid #d3d4bb;border-radius:1rem}
+.cassette i{width:17%;aspect-ratio:1;z-index:1;border-radius:50%;border:5px solid #ddd5b8;background:repeating-conic-gradient(#b5a082 0 20deg,#355360 21deg 55deg);box-shadow:0 0 0 2px #253e48}
+.cassette.playing i{animation:reel 2s linear infinite}@keyframes reel{to{rotate:360deg}}
+.paper{border:1px solid #d1ad84;border-radius:.4rem;background:repeating-linear-gradient(#fff4d8 0 26px,#d8c1a2 27px,#fff4d8 28px);box-shadow:2px 4px 12px #72583b29}
+textarea{display:block;resize:vertical;width:100%;min-height:112px;padding:0 .8rem;border:0;background:transparent;color:#2b474d;font:16px/28px system-ui,sans-serif}
+canvas{width:100%;display:block;touch-action:none;border-top:1px dashed #ad8d69;cursor:crosshair}
+@media(prefers-reduced-motion:reduce){.cassette.playing i{animation:none}}
