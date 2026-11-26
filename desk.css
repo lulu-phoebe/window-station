@@ -144,3 +144,7 @@ header{flex-direction:column;align-items:flex-end;gap:8px}
 @keyframes boot-glow{0%,100%{opacity:.15;transform:scale(.92)}35%{opacity:.62;transform:scale(1.04)}}
 #boot .t{margin-top:18px;font:11px/1 "Songti SC","SimSun",serif;letter-spacing:.4em;text-indent:.4em;color:rgba(43,58,51,.62)}
 @media (prefers-reduced-motion:reduce){#boot .win i{animation:none;opacity:.45}#boot .win::after{animation:none;opacity:.25}}
+/* 房间图淡入，像光慢慢透进来 */
+.room-image{animation:room-in 1.3s ease-out both}
+@keyframes room-in{from{opacity:0;transform:scale(1.012)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.room-image{animation:none}}

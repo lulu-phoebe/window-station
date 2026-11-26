@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="用鼠标探索窗边书桌，指向物件，看看它们轻轻浮起来。">
 <title>窗边小站</title>
-<link rel="stylesheet" href="desk.css?v=20">
+<link rel="stylesheet" href="desk.css?v=21">
 <script type="module" src="desk.js?v=42"></script>
   <link rel="prefetch" href="bathroom-mirror.html?drops=22" as="document">
 </head>
@@ -73,19 +73,24 @@
   if (!b) return;
   var img = document.querySelector('.room-image');
   var closed = false;
+  var MIN_MS = 1600;           /* 动画至少显示 1.6 秒 */
+  var start = Date.now();
   function done() {
     if (closed) return;
     closed = true;
-    b.classList.add('done');
-    setTimeout(function () { if (b && b.parentNode) b.parentNode.removeChild(b); }, 900);
+    var wait = Math.max(0, MIN_MS - (Date.now() - start));
+    setTimeout(function () {
+      b.classList.add('done');
+      setTimeout(function () { if (b && b.parentNode) b.parentNode.removeChild(b); }, 900);
+    }, wait);
   }
   if (img && !img.complete) {
     img.addEventListener('load', done, { once: true });
     img.addEventListener('error', done, { once: true });
   } else {
-    setTimeout(done, 400);
+    setTimeout(done, 200);
   }
-  setTimeout(done, 7000);
+  setTimeout(done, 8000);
 })();
 </script>
 </body>
