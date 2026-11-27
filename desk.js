@@ -1,4 +1,4 @@
-import {addNanjingWeather} from './nanjing-weather.js?v=33';
+import {addNanjingWeather} from './nanjing-weather.js?v=34';
 
 const dialog = document.querySelector('#details');
 const held = dialog.querySelector('.held');
